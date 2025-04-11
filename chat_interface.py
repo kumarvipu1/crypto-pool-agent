@@ -1024,22 +1024,17 @@ def main():
     set_page_config()
     
     # Display header with both logos
-    agusto_logo_path = "assets/Agusto_logo.jpg"
-    vizyx_logo_path = "assets/vizyx_logo.png"
+    pool_sweeper_logo_path = "assets/logo.png"
     
     # Header HTML
     header_html = f"""
         <div class="logo-container glass-effect">
             <div class="left-section">
-                <img src="data:image/jpg;base64,{get_base64_encoded_image(agusto_logo_path)}" alt="Agusto Logo" class="agusto-logo"/>
+                <img src="data:image/png;base64,{get_base64_encoded_image(pool_sweeper_logo_path)}" alt="Pool-Sweeper Logo" class="agusto-logo"/>
                 <div class="title-container">
                     <h2 class="main-title">Pool-Sweeper Agent</h2>
                     <p class="sub-title">AI-Powered Liquidity Analysis</p>
                 </div>
-            </div>
-            <div class="right-section">
-                <img src="data:image/png;base64,{get_base64_encoded_image(vizyx_logo_path)}" alt="Vizyx Logo" class="vizyx-logo"/>
-                <p class="powered-by">Powered by Vizyx</p>
             </div>
         </div>
         <div class="main-content">
