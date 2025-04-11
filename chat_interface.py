@@ -1162,28 +1162,40 @@ def main():
                     try:
                         
                         if chat["response"].html_path:
-                            image_paths = chat["response"].html_path
-                            try:
-                                # Try UTF-8 first
+                            for html_path in chat["response"].html_path:
+                                image_paths = html_path
                                 try:
-                                    with open(image_paths, 'r', encoding='utf-8') as file:
-                                        html_text = file.read()
-                                except UnicodeDecodeError:
-                                    # If UTF-8 fails, try with utf-8-sig (handles BOM)
                                     try:
-                                        with open(image_paths, 'r', encoding='utf-8-sig') as file:
+                                        # Try UTF-8 first
+                                        with open(image_paths, 'r', encoding='utf-8') as file:
                                             html_text = file.read()
                                     except UnicodeDecodeError:
-                                        # If that fails too, try with latin-1
-                                        with open(image_paths, 'r', encoding='latin-1') as file:
-                                            html_text = file.read()
-                                
-                                st.components.v1.html(html_text, width=1000, height=1000, scrolling=True)  # Increased height to accommodate dots
-                            except Exception as e:
-                                st.warning(f"Error displaying HTML file: {str(e)}")
-                                if chat["response"].png_path:
-                                    image_paths = chat["response"].png_path
-                                    st.image(image_paths)
+                                        # If UTF-8 fails, try with utf-8-sig (handles BOM)
+                                        try:
+                                            with open(image_paths, 'r', encoding='utf-8-sig') as file:
+                                                html_text = file.read()
+                                        except UnicodeDecodeError:
+                                            # If that fails too, try with latin-1
+                                            with open(image_paths, 'r', encoding='latin-1') as file:
+                                                html_text = file.read()
+                                    
+                                    # Reduced height and added custom CSS to minimize spacing
+                                    st.components.v1.html(html_text, width=1000, height=600, scrolling=True)
+                                    st.markdown("""
+                                        <style>
+                                        /* Reduce spacing between HTML components */
+                                        iframe {
+                                            margin-bottom: -20px !important;
+                                            margin-top: -20px !important;
+                                        }
+                                        </style>
+                                    """, unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.info(f"Error displaying HTML file: {str(e)}")
+                                    if chat["response"].png_path:
+                                        for png_path in chat["response"].png_path:
+                                            image_paths = png_path
+                                            st.image(image_paths)
                         elif chat["response"].png_path:
                             image_paths = chat["response"].png_path
                             try:
