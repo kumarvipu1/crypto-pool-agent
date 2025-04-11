@@ -31,11 +31,6 @@ import json
 dotenv.load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-index = pc.Index("agusto-demo")
-
-
 
 
 logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), scrubbing=False)
