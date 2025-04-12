@@ -4,7 +4,7 @@ from pathlib import Path
 import base64
 from PIL import Image
 import os
-from agent_module import run_agent
+from agent_module import run_agent, agent_response
 import asyncio
 import nest_asyncio
 import uuid
@@ -12,11 +12,22 @@ import re
 from datetime import datetime
 from typing import Annotated, List, Optional, Tuple
 from markdown_pdf import MarkdownPdf, Section
-from streamlit_elements import elements, mui, html, sync
 import streamlit.components.v1 as components
 import pandas as pd
+import json
+import ast
 from io import BytesIO
 import plotly.io as pio
+from portia import (
+    Portia,
+    example_tool_registry,
+)
+from pydantic import BaseModel, Field
+from portia.tool import Tool, ToolRunContext
+from portia import InMemoryToolRegistry
+from tool_lib import QueryRunner
+import json
+import ast
 pio.templates["custom"] = pio.templates["seaborn"]
 pio.templates.default = "custom"
 pio.templates["custom"].layout.autosize = True
@@ -28,6 +39,39 @@ nest_asyncio.apply()
 # Initialize session state
 if "file_hashes" not in st.session_state:
     st.session_state.file_hashes = {}
+    
+
+
+def convert_to_agent_response(json_str: str) -> agent_response:
+    """
+    Convert JSON string output from Portia to agent_response BaseModel
+    
+    Args:
+        json_str: JSON string containing the Portia output
+        
+    Returns:
+        agent_response: Populated agent_response BaseModel object
+    """
+    # Parse the JSON string
+    data = json.loads(json_str)
+    
+    # Extract the 'value' from 'final_output'
+    final_output_str = data['outputs']['final_output']['value']
+    
+    # Convert the string representation of dictionary to actual dictionary
+    response_dict = ast.literal_eval(final_output_str)
+    
+    # Create and return agent_response object
+    return agent_response(
+        markdown_report=response_dict['markdown_report'],
+        csv_path=response_dict['csv_path'],
+        metrics_dict=response_dict['metrics_dict'],
+        html_path=response_dict['html_path'],
+        png_path=response_dict['png_path'],
+        pdf_path=response_dict['pdf_path'],
+        enso_route=response_dict['enso_route'],
+        enso_route_file=response_dict['enso_route_file']
+    )
 
 @st.cache_data
 def get_base64_image_src(img_path):
@@ -84,429 +128,6 @@ def write_markdown_to_file(content: Annotated[str, "The markdown content to writ
     except Exception as e:
         st.error(f"Error writing file: {str(e)}")
         return f"Error creating file {filename}: {str(e)}"
-
-
-
-def create_slideshow(image_paths, height=800):
-    # Ensure we have a list of image paths
-    if not isinstance(image_paths, list):
-        image_paths = [image_paths]
-    
-    # Take first 3 images from the list (or all if less than 3)
-    images = image_paths
-    
-    # Generate the slides HTML dynamically
-    slides_html = ""
-    dots_html = ""
-    
-    for i, img_path in enumerate(images, 1):
-        # Convert image to base64 for embedding directly in HTML
-        try:
-            with open(img_path, "rb") as img_file:
-                img_data = base64.b64encode(img_file.read()).decode()
-                img_src = f"data:image/png;base64,{img_data}"
-        except Exception as e:
-            st.warning(f"Error loading image {img_path}: {e}")
-            # Use the path directly as fallback
-            img_src = img_path
-            
-        slides_html += f"""
-        <div class="mySlides fade">
-            <div class="numbertext">{i} / {len(images)}</div>
-            <img src="{img_src}" class="slideshow-image" id="img-{i}" style="width:100%; height: auto; object-fit: contain;" onclick="openModal();currentModalSlide({i})">
-            <div class="text">Image {i}</div>
-        </div>
-        """
-        dots_html += f'<span class="dot" onclick="currentSlide({i})"></span> '
-
-    # Modal content for popup images
-    modal_content = ""
-    for i, img_path in enumerate(images, 1):
-        try:
-            with open(img_path, "rb") as img_file:
-                img_data = base64.b64encode(img_file.read()).decode()
-                img_src = f"data:image/png;base64,{img_data}"
-        except Exception as e:
-            img_src = img_path
-            
-        modal_content += f"""
-        <div class="modal-slides">
-            <img src="{img_src}" style="width:100%">
-        </div>
-        """
-
-    # Create the complete HTML with the dynamic content
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-    * {{box-sizing: border-box;}}
-    body {{font-family: Verdana, sans-serif; margin: 0;}}
-    .mySlides {{display: none;}}
-    img {{vertical-align: middle;}}
-
-    .slideshow-container {{
-        max-width: 1000px;
-        position: relative;
-        margin: 0 auto;
-        height: auto;
-    }}
-
-    .text {{
-        color: grey;
-        font-size: 15px;
-        padding: 8px 12px;
-        position: absolute;
-        bottom: 8px;
-        width: 100%;
-        text-align: center;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    }}
-
-    .numbertext {{
-        color: grey;
-        font-size: 12px;
-        padding: 8px 12px;
-        position: absolute;
-        top: 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    }}
-
-    .dot {{
-        height: 15px;
-        width: 15px;
-        margin: 0 1px;
-        background-color: #bbb;
-        border-radius: 50%;
-        display: inline-block;
-        transition: background-color 0.6s ease;
-        cursor: pointer;
-        margin-bottom: 0;
-        padding-bottom: 0;
-        margin-top: -10px; /* Adjusted to bring slightly up in position */
-    }}
-
-    .active, .dot:hover {{
-        background-color: #717171;
-    }}
-
-    .fade {{
-        animation-name: fade;
-        animation-duration: 0.5s;
-    }}
-
-    @keyframes fade {{
-        from {{opacity: .4}} 
-        to {{opacity: 1}}
-    }}
-    
-    /* Zoom feature */
-    .zoom-container {{
-        position: relative;
-        margin: auto;
-    }}
-    
-    .zoom-lens {{
-        position: absolute;
-        border: 0px solid #d4d4d4;
-        width: 60px;
-        height: 60px;
-        background-color: rgba(255, 255, 255, 0.4);
-        display: none;
-        pointer-events: none;
-    }}
-    
-    .zoom-result {{
-        position: absolute;
-        border: 1px solid #d4d4d4;
-        width: 200px;
-        height: 200px;
-        background-repeat: no-repeat;
-        display: none;
-        z-index: 999;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        background-color: white;
-        overflow: visible;
-    }}
-    
-    /* Modal (background) */
-    .modal {{
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        padding-top: 50px;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        overflow: auto;
-        background-color: rgba(0,0,0,0.9);
-    }}
-
-    /* Modal Content */
-    .modal-content {{
-        position: relative;
-        margin: auto;
-        padding: 0;
-        width: 90%;
-        max-width: 1200px;
-    }}
-
-    /* The Close Button */
-    .close {{
-        color: white;
-        position: absolute;
-        top: 10px;
-        right: 25px;
-        font-size: 35px;
-        font-weight: bold;
-        transition: 0.3s;
-        z-index: 1001;
-    }}
-
-    .close:hover,
-    .close:focus {{
-        color: #999;
-        text-decoration: none;
-        cursor: pointer;
-    }}
-
-    /* Hide the slides by default */
-    .modal-slides {{
-        display: none;
-    }}
-
-    /* Next & previous buttons */
-    .prev,
-    .next {{
-        cursor: pointer;
-        position: absolute;
-        top: 50%;
-        width: auto;
-        padding: 16px;
-        margin-top: -50px;
-        color: white;
-        font-weight: bold;
-        font-size: 20px;
-        transition: 0.6s ease;
-        border-radius: 0 3px 3px 0;
-        user-select: none;
-        -webkit-user-select: none;
-        background-color: rgba(0,0,0,0.3);
-    }}
-
-    /* Position the "next button" to the right */
-    .next {{
-        right: 0;
-        border-radius: 3px 0 0 3px;
-    }}
-
-    /* On hover, add a black background color with a little bit see-through */
-    .prev:hover,
-    .next:hover {{
-        background-color: rgba(0,0,0,0.8);
-    }}
-    
-    /* Make images clickable */
-    .slideshow-image {{
-        cursor: pointer;
-    }}
-
-    /* Reduce dot container spacing */
-    div[style*="text-align:center"] {{
-        margin-top: 5px;
-        margin-bottom: 0;
-        padding-bottom: 0;
-    }}
-
-    /* Adjust dot spacing */
-    .dot {{
-        margin-bottom: 0;
-        padding-bottom: 0;
-        position: relative;
-        top: -80px;
-    }}
-    </style>
-    </head>
-    <body>
-
-    <div class="slideshow-container zoom-container">
-        <div class="zoom-lens" id="lens"></div>
-        <div class="zoom-result" id="result"></div>
-        {slides_html}
-    </div>
-    <br>
-
-    <div style="text-align:center">
-        {dots_html}
-    </div>
-    
-    <!-- The Modal/Lightbox -->
-    <div id="imageModal" class="modal">
-        <span class="close" onclick="closeModal()">&times;</span>
-        <div class="modal-content">
-            {modal_content}
-            
-            <a class="prev" onclick="plusModalSlides(-1)">&#10094;</a>
-            <a class="next" onclick="plusModalSlides(1)">&#10095;</a>
-        </div>
-    </div>
-
-    <script>
-    let slideIndex = 1;
-    let modalSlideIndex = 1;
-    showSlides(slideIndex);
-    
-    // Next/previous controls
-    function plusSlides(n) {{
-        showSlides(slideIndex += n);
-    }}
-    
-    // Thumbnail image controls
-    function currentSlide(n) {{
-        showSlides(slideIndex = n);
-    }}
-    
-    function showSlides(n) {{
-        let i;
-        let slides = document.getElementsByClassName("mySlides");
-        let dots = document.getElementsByClassName("dot");
-        if (n > slides.length) {{slideIndex = 1}}
-        if (n < 1) {{slideIndex = slides.length}}
-        for (i = 0; i < slides.length; i++) {{
-            slides[i].style.display = "none";
-        }}
-        for (i = 0; i < dots.length; i++) {{
-            dots[i].className = dots[i].className.replace(" active", "");
-        }}
-        slides[slideIndex-1].style.display = "block";
-        dots[slideIndex-1].className += " active";
-        
-        // Reset zoom for the new slide
-        setupZoom();
-    }}
-    
-    // Modal functions
-    function openModal() {{
-        document.getElementById("imageModal").style.display = "block";
-    }}
-    
-    function closeModal() {{
-        document.getElementById("imageModal").style.display = "none";
-    }}
-    
-    function plusModalSlides(n) {{
-        showModalSlides(modalSlideIndex += n);
-    }}
-    
-    function currentModalSlide(n) {{
-        showModalSlides(modalSlideIndex = n);
-    }}
-    
-    function showModalSlides(n) {{
-        let i;
-        let slides = document.getElementsByClassName("modal-slides");
-        if (n > slides.length) {{modalSlideIndex = 1}}
-        if (n < 1) {{modalSlideIndex = slides.length}}
-        for (i = 0; i < slides.length; i++) {{
-            slides[i].style.display = "none";
-        }}
-        slides[modalSlideIndex-1].style.display = "block";
-    }}
-    
-    // Close the modal when clicking outside of the image
-    window.onclick = function(event) {{
-        const modal = document.getElementById("imageModal");
-        if (event.target == modal) {{
-            closeModal();
-        }}
-    }}
-    
-    // Zoom functionality
-    function setupZoom() {{
-        const lens = document.getElementById("lens");
-        const result = document.getElementById("result");
-        const currentImage = document.querySelector(".mySlides:not([style*='display: none']) img");
-        
-        if (!currentImage) return;
-        
-        // Set up event listeners for the current image
-        currentImage.addEventListener("mousemove", moveLens);
-        currentImage.addEventListener("mouseenter", function() {{
-            lens.style.display = "block";
-            result.style.display = "block";
-        }});
-        currentImage.addEventListener("mouseleave", function() {{
-            lens.style.display = "none";
-            result.style.display = "none";
-        }});
-        
-        function moveLens(e) {{
-            let pos, x, y;
-            // Prevent any other actions that may occur
-            e.preventDefault();
-            // Get the cursor's x and y positions:
-            pos = getCursorPos(e);
-            // Calculate the position of the lens:
-            x = pos.x - (lens.offsetWidth / 4);
-            y = pos.y - (lens.offsetHeight / 4);
-            
-            // Prevent the lens from being positioned outside the image:
-            if (x > currentImage.width - lens.offsetWidth) {{x = currentImage.width - lens.offsetWidth;}}
-            if (x < 0) {{x = 0;}}
-            if (y > currentImage.height - lens.offsetHeight) {{y = currentImage.height - lens.offsetHeight;}}
-            if (y < 0) {{y = 0;}}
-            
-            // Set the position of the lens:
-            lens.style.left = x + "px";
-            lens.style.top = y + "px";
-            
-            // Position the result div relative to the cursor
-            result.style.left = (pos.x + 20) + "px";
-            result.style.top = (pos.y - 20) + "px";
-            
-            // Display what the lens "sees" with 50% reduced magnification
-            // Reduce the magnification by 50% by adjusting the cx and cy values
-            const cx = (result.offsetWidth / lens.offsetWidth) * 0.5; // Reduced by 50%
-            const cy = (result.offsetHeight / lens.offsetHeight) * 0.5; // Reduced by 50%
-            
-            result.style.backgroundImage = "url('" + currentImage.src + "')";
-            result.style.backgroundSize = (currentImage.width * cx) + "px " + (currentImage.height * cy) + "px";
-            result.style.backgroundPosition = "-" + (x * cx) + "px -" + (y * cy) + "px";
-        }}
-        
-        function getCursorPos(e) {{
-            let a, x = 0, y = 0;
-            e = e || window.event;
-            // Get the x and y positions of the image:
-            a = currentImage.getBoundingClientRect();
-            // Calculate the cursor's x and y coordinates, relative to the image:
-            x = e.pageX - a.left;
-            y = e.pageY - a.top;
-            // Consider any page scrolling:
-            x = x - window.pageXOffset;
-            y = y - window.pageYOffset;
-            return {{x : x, y : y}};
-        }}
-    }}
-    
-    // Initialize zoom for the first slide
-    document.addEventListener("DOMContentLoaded", function() {{
-        // Show first slide and set up zoom
-        showSlides(1);
-    }});
-    </script>
-
-    </body>
-    </html> 
-    """
-
-    # Display using streamlit components
-    components.html(html_content, height=height-50)
-
-
 
 
 FIXED_CONTAINER_CSS = """
@@ -627,85 +248,6 @@ def load_pdf_as_base64(pdf_path):
         st.error(f"Error loading PDF: {e}")
         return None
 
-def display_metrics(metrics_dict):
-    """
-    Display metrics in rows without predefined categories
-    """
-    try:
-        # Parse metrics if it's a string
-        if isinstance(metrics_dict, str):
-            try:
-                metrics = json.loads(metrics_dict.replace("'", '"'))
-            except json.JSONDecodeError as e:
-                st.error(f"Failed to parse metrics data: Invalid JSON format\nError: {str(e)}")
-                return
-        elif isinstance(metrics_dict, dict):
-            metrics = metrics_dict
-        else:
-            st.error(f"Unexpected metrics data type: {type(metrics_dict)}. Expected string or dictionary.")
-            return
-
-        if not metrics:
-            st.info("No metrics data available")
-            return
-
-        # Get all metrics and create rows
-        all_metrics = list(metrics.items())
-        num_metrics = len(all_metrics)
-        
-        # Create rows with up to 4 columns each
-        for i in range(0, num_metrics, 4):
-            # Create columns for this row
-            row_metrics = all_metrics[i:min(i + 4, num_metrics)]
-            cols = st.columns(len(row_metrics))
-            
-            # Display metrics in columns
-            for col, (key, value) in zip(cols, row_metrics):
-                try:
-                    with col:
-                        if isinstance(value, dict):
-                            # Handle nested dictionaries
-                            for sub_key, sub_value in value.items():
-                                st.metric(
-                                    label=f"{key} - {sub_key}",
-                                    value=("• " + "\n• ".join(str(x) for x in sub_value)) if isinstance(sub_value, list) else (str(sub_value) + "\n" if sub_value is not None else "N/A")
-                                )
-                        elif isinstance(value, list):
-                            # Handle lists
-                            if not value:
-                                st.metric(label=key, value="No data")
-                            else:
-                                # Show first item as main metric
-                                st.metric(label=key, value=str(value[0]))
-                                # Show remaining items as bullet points
-                                if len(value) > 1:
-                                    st.markdown(f"**Additional {key}:**")
-                                    for item in value[1:]:
-                                        st.markdown(f"• {item}")
-                        else:
-                            # Handle single values
-                            display_value = (
-                                str(value) if value is not None and value != "" 
-                                else "N/A"
-                            )
-                            st.metric(label=key, value=display_value)
-                            
-                except Exception as e:
-                    st.warning(f"Error displaying metric '{key}': {str(e)}")
-                    continue
-            
-            # Add space between rows
-            if i + 4 < num_metrics:
-                st.write("")
-
-    except Exception as e:
-        st.error(f"""
-        Error processing metrics visualization
-        Error type: {type(e).__name__}
-        Error details: {str(e)}
-        """)
-        st.error("Problematic metrics data:")
-        st.code(str(metrics_dict))
 
 # Create a new event loop for async operations
 def get_agent_response(user_query):
@@ -1043,7 +585,7 @@ def main():
     # Footer HTML
     footer_html = f"""
         <div class="footer-content">
-            <span>© {datetime.now().year} Vizyx Ltd. All rights reserved. For demonstration purposes only.</span>
+            <span>© {datetime.now().year} By Buffer Overflow. For demonstration purposes only.</span>
         </div>
     """
 
@@ -1056,6 +598,11 @@ def main():
 
     st.title("Pool-Sweeper")
     st.write("Welcome to the Pool-Sweeper - Agent for Liquidity Analysis")
+    
+    custom_tool_registry = InMemoryToolRegistry.from_local_tools(
+    [
+        QueryRunner()
+    ])
 
     with st_fixed_container(mode="fixed", position="bottom"):
         st.markdown("""
@@ -1100,7 +647,10 @@ def main():
         with st.spinner(f"Processing response for: {user_query}..."):
             try:
                 # Get response from agent
-                response = get_agent_response(user_query)
+                portia = Portia(tools=custom_tool_registry)
+                plan_run = portia.run(user_query)
+                output = plan_run.model_dump_json(indent=2)
+                response = convert_to_agent_response(output)
                 
                 if response:
                     # Validate metrics_dict before adding to history
@@ -1199,7 +749,7 @@ def main():
                         elif chat["response"].png_path:
                             image_paths = chat["response"].png_path
                             try:
-                                create_slideshow(image_paths, height=1000)
+                                st.image(image_paths)
                             except Exception as e:
                                 st.warning("Error displaying image")
                         else:
@@ -1214,6 +764,10 @@ def main():
                 Error details: {str(e)}
                 """
                 )
+            if chat["response"].enso_route != "":
+                st.markdown("## Transaction Route")
+                st.markdown(f"Enso Route: {chat['response'].enso_route}")
+                
         st.markdown("--------------------------------")
 
     # Display footer at the end
