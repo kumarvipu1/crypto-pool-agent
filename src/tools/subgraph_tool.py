@@ -8,6 +8,7 @@ import pandas as pd
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 from typing import Dict, Any, List, Optional
+import json
 
 class SubgraphQueryInput(BaseModel):
     """Input schema for the subgraph query tool."""
@@ -36,7 +37,10 @@ class SubgraphQueryTool(Tool[SubgraphQueryOutput]):
     args_schema: type[BaseModel] = SubgraphQueryInput
     output_schema: tuple[str, str] = ("SubgraphQueryOutput", "Output containing file path and dataset summary")
     should_summarize: bool = False
-
+    
+    # Schema information
+    schema_info: Dict[str, Any] = {}
+    
     def __init__(self):
         super().__init__()
         transport = RequestsHTTPTransport(
@@ -45,6 +49,61 @@ class SubgraphQueryTool(Tool[SubgraphQueryOutput]):
             retries=3
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
+        
+        # Load the local schema file
+        self._load_schema()
+    
+    def _load_schema(self):
+        """Load the schema from the local schema.graphql file."""
+        try:
+            schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "schema.graphql")
+            if os.path.exists(schema_path):
+                with open(schema_path, "r") as f:
+                    schema_content = f.read()
+                
+                # Extract entity information from the schema
+                self.schema_info = self._parse_schema(schema_content)
+                print(f"Loaded schema with {len(self.schema_info)} entities")
+            else:
+                print(f"Schema file not found at {schema_path}")
+        except Exception as e:
+            print(f"Error loading schema: {str(e)}")
+    
+    def _parse_schema(self, schema_content: str) -> Dict[str, Any]:
+        """Parse the schema content to extract entity information."""
+        entities = {}
+        
+        # Simple parsing to extract entity definitions
+        lines = schema_content.split("\n")
+        current_entity = None
+        current_fields = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Check for entity definition
+            if line.startswith("type ") and " @entity" in line:
+                if current_entity:
+                    entities[current_entity] = current_fields
+                
+                current_entity = line.split("type ")[1].split(" @entity")[0]
+                current_fields = []
+            
+            # Check for field definition
+            elif line and not line.startswith("#") and ":" in line and current_entity:
+                field_name = line.split(":")[0].strip()
+                field_type = line.split(":")[1].strip().split("!")[0].strip()
+                current_fields.append({"name": field_name, "type": field_type})
+        
+        # Add the last entity
+        if current_entity:
+            entities[current_entity] = current_fields
+        
+        return entities
+    
+    def get_schema_info(self) -> Dict[str, Any]:
+        """Get information about the schema."""
+        return self.schema_info
     
     def run(self, ctx: ToolRunContext, query: str, output_file: str = "query_results.csv", flatten_nested: bool = True) -> SubgraphQueryOutput:
         """

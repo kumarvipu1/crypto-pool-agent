@@ -4,7 +4,7 @@ from pathlib import Path
 import base64
 from PIL import Image
 import os
-from agent import run_agent
+from src.agent import run_agent
 import asyncio
 import nest_asyncio
 import uuid
@@ -704,7 +704,7 @@ def get_agent_response(user_query):
         asyncio.set_event_loop(loop)
         
         # Run the agent in the new event loop
-        response = run_agent(user_query)
+        response = loop.run_until_complete(run_agent(user_query))
         
         # Close the loop
         loop.close()

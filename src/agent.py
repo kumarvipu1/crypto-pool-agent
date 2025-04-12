@@ -15,6 +15,7 @@ from src.tools.chart_tool import ChartGeneratorTool
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from markdown_pdf import MarkdownPdf, Section
+import json
 
 # Load environment variables
 load_dotenv()
@@ -47,8 +48,9 @@ class AgentResponse:
         self.pdf_path = pdf_path
 
 # Initialize tools
+subgraph_tool = SubgraphQueryTool()
 tools = [
-    SubgraphQueryTool(),
+    subgraph_tool,
     MetricCalculatorTool(),
     ChartGeneratorTool()
 ]
@@ -56,10 +58,22 @@ tools = [
 # Create tool registry
 tool_registry = ToolRegistry(tools)
 
+# Get schema information
+schema_info = subgraph_tool.get_schema_info()
+
+# Format schema information for the system prompt
+schema_description = "The GraphQL schema includes the following entities:\n"
+for entity, fields in schema_info.items():
+    schema_description += f"- {entity}: A crypto pool entity with fields:\n"
+    for field in fields:
+        schema_description += f"  - {field['name']} ({field['type']})\n"
+
 # Create Portia instance with system prompt
-system_prompt = """
+system_prompt = f"""
 You are an analyst for a crypto trading company. Your goal is to analyze liquidity of a crypto token 
 and provide users important information relevant to the user query with a detailed report.
+
+{schema_description}
 
 You have access to the following tools:
 1. subgraph_query: Executes GraphQL queries against crypto pool subgraphs
