@@ -49,22 +49,24 @@ LOGFIRE_TOKEN=your_logfire_token
 
 ## Usage
 
-### Command Line Interface
+### Web Interface (Primary Method)
 
-Run an analysis with a specific query:
-
+1. Start the Streamlit server:
 ```bash
-python src/main.py "Analyze the liquidity of Uniswap V3 pools"
+streamlit run src/main.py
 ```
 
-The script will:
-1. Query the subgraph for pool data
-2. Calculate relevant metrics
-3. Generate visualizations
-4. Create a PDF report
-5. Output paths to all generated files
+2. Open your web browser and navigate to the provided URL (typically http://localhost:8501)
 
-### Python API
+3. Use the web interface to:
+   - Enter your analysis query
+   - View interactive visualizations
+   - Download the PDF report
+   - Explore metrics and insights
+
+### Python API (For Developers)
+
+If you want to integrate the agent into your own Python code:
 
 ```python
 from src.agent import run_agent
