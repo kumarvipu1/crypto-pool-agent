@@ -595,8 +595,8 @@ class agent_response(BaseModel):
     markdown_report: str = Field(description="The markdown report of the user query")
     csv_path: str = Field(description="The path where the reference csv file is stored as retreived by the tool")
     metrics_dict: str = Field(description = "A string of metrics calculated from the data in tabular format using tabulate library as returned by the metric_calculator tool")
-    html_path: str = Field(description = "The path where the html of visualizations is stored")
-    png_path: str = Field(description = "The path where the png of visualizations is stored")
+    html_path: list[str] = Field(description = "The list of paths where the html of visualizations is stored")
+    png_path: list[str] = Field(description = "The list of paths where the png of visualizations is stored")
     pdf_path: str = Field(description = "The path where the pdf of the report can be stored")
     
 model = openai.OpenAIModel('gpt-4o', api_key=os.getenv('OPENAI_API_KEY'))
