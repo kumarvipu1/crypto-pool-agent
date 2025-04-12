@@ -629,7 +629,7 @@ def get_agent_system_prompt(ctx: RunContext[agent_state]):
     4. Use the get_column_list tool to retrieve the column list from the csv file, use these columns for metric calculation and visualization
     5. List out the metrics that you can calculate from the liquidity information and data summary
     6. Use the metric_calculator tool to run the python code using the tabulate library to calculate the metrics, use print statement to read the calculated metrics in tabular format
-    7. IMPORTANT:use the get_transaction_route tool to get the routing information from the user query is about the best route to swap the token
+    7. use the get_transaction_route tool to get the routing information from the user query is about the best route to swap the token
     8. Plot charts for the metrics calculated in step 6 using plotly express library and save them in html and png format. Use the graph_generator tool to execute the code and save the output in html and png format
     9. Analyze the liquidity information thoroughly, focusing the information asked by the user in the query
     10. Create a comprehensive markdown report, use your best judgement to structure the report. Bold the key information asked by the user in the report.
