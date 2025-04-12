@@ -1,5 +1,5 @@
 # Use the correct platform (x86_64) for GCP environments
-FROM --platform=linux/amd64 python:3.9-bookworm
+FROM --platform=linux/amd64 python:3.11.12-bookworm
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
