@@ -26,6 +26,7 @@ from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 import pandas as pd
 from datetime import datetime
+from pydantic_ai.providers.openai import OpenAIProvider
 import json
 
 dotenv.load_dotenv()
@@ -582,8 +583,6 @@ type TokenHourData @entity {
 
 
 
-
-
 @dataclass
 class agent_state:
     user_query: str = Field(description="The user quer that needs to be answered")
@@ -599,7 +598,7 @@ class agent_response(BaseModel):
     png_path: list[str] = Field(description = "The list of paths where the png of visualizations is stored")
     pdf_path: str = Field(description = "The path where the pdf of the report can be stored")
     
-model = openai.OpenAIModel('gpt-4o', api_key=os.getenv('OPENAI_API_KEY'))
+model = openai.OpenAIModel('gpt-4o',provider=OpenAIProvider(api_key=os.getenv('OPENAI_API_KEY')))
 agent = Agent(model=model, deps_type=agent_state, result_type=agent_response)
 
 current_date = datetime.now().strftime("%Y-%m-%d")
