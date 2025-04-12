@@ -5,68 +5,71 @@ import os
 import json
 import pandas as pd
 from typing import Dict, Any
+from gql import gql, Client
+from gql.transport.requests import RequestsHTTPTransport
 
 class SubgraphQuerySchema(BaseModel):
     gql_query: str = Field(..., description="The GraphQL query to run")
     output_file: str = Field(..., description="The name of the CSV file to save the results")
 
 class SubgraphQueryTool(Tool):
+    """Tool for querying subgraph data and saving to CSV"""
+    
     def __init__(self):
         super().__init__(
-            id="subgraph_query_tool",
-            name="Subgraph Query Tool",
-            description="Executes GraphQL queries against a subgraph and saves results to CSV",
-            parameters={
-                "gql_query": {
-                    "type": "string",
-                    "description": "The GraphQL query to execute"
-                },
-                "output_file": {
-                    "type": "string",
-                    "description": "Path to save the CSV output"
-                }
-            }
+            name="subgraph_query_tool",
+            description="Runs a GraphQL query on the subgraph and saves results to CSV"
         )
-        
-    def execute(self, inputs: Dict[str, Any]) -> str:
+    
+    def execute(self, query: str, output_file: str = "query_results.csv") -> str:
         """
         Execute a GraphQL query and save results to CSV.
         
         Args:
-            inputs (Dict[str, Any]): Dictionary containing:
-                - gql_query: The GraphQL query to execute
-                - output_file: Path to save the CSV output
-                
+            query: The GraphQL query to execute
+            output_file: Path to save the CSV file
+            
         Returns:
-            str: Status message indicating success or failure
+            str: Status message with dataset summary
         """
+        # Set up transport and client
+        transport = RequestsHTTPTransport(url=os.getenv("GRAPHQL_ENDPOINT"), verify=True, retries=3)
+        client = Client(transport=transport, fetch_schema_from_transport=True)
+
         try:
-            # Get the GraphQL endpoint from environment
-            endpoint = os.getenv("GRAPHQL_ENDPOINT")
-            if not endpoint:
-                raise ValueError("GRAPHQL_ENDPOINT environment variable not set")
-            
             # Execute the query
-            response = requests.post(
-                endpoint,
-                json={"query": inputs["gql_query"]},
-                headers={"Content-Type": "application/json"}
-            )
-            
-            # Check for errors
-            if "errors" in response.json():
-                raise ValueError(f"GraphQL query failed: {response.json()['errors']}")
-            
-            # Extract data from response
-            data = response.json()["data"]
-            
-            # Convert to DataFrame
-            df = pd.json_normalize(data)
-            
-            # Save to CSV
-            df.to_csv(inputs["output_file"], index=False)
-            
-            return f"Successfully executed query and saved results to {inputs['output_file']}"
-            
+            response = client.execute(gql(query))
+
+            # Flatten the top-level field dynamically
+            top_level_key = list(response.keys())[0]
+            data = response[top_level_key]
+
+            # Flatten nested data structures
+            flat_data = []
+            if len(data) > 0:
+                for item in data:
+                    flat_item = item.copy()
+                    # Handle nested token data
+                    if "token0" in item and isinstance(item["token0"], dict):
+                        flat_item.update({
+                            "token0_id": item["token0"].get("id"),
+                            "token0_symbol": item["token0"].get("symbol"),
+                            "token0_name": item["token0"].get("name"),
+                        })
+                        del flat_item["token0"]
+                    if "token1" in item and isinstance(item["token1"], dict):
+                        flat_item.update({
+                            "token1_id": item["token1"].get("id"),
+                            "token1_symbol": item["token1"].get("symbol"),
+                            "token1_name": item["token1"].get("name"),
+                        })
+                        del flat_item["token1"]
+                    flat_data.append(flat_item)
+
+                # Convert to DataFrame and save
+                df = pd.DataFrame(flat_data)
+                df.to_csv(output_file, index=False)
+                return f"Saved query results to {output_file}\nDataset summary:\n{df.describe()}"
+
         except Exception as e:
-            return f"Error executing query: {str(e)}" 
+            return f"GraphQL query failed: {str(e)}" 

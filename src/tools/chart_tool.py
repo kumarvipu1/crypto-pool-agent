@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from portia.tool import Tool, ToolRunContext
+from portia import Tool
+from typing import Dict, Any, Optional
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
@@ -7,77 +8,58 @@ import os
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, Any
+import plotly.graph_objects as go
 
 class ChartGeneratorSchema(BaseModel):
     code: str = Field(..., description="The Python code to execute to generate charts")
     csv_file: str = Field(..., description="The path to the CSV file containing the data")
-    output_prefix: str = Field(..., description="Prefix for the output files")
+    output_dir: str = Field(..., description="The directory to save the generated charts")
 
 class ChartGeneratorTool(Tool):
+    """Tool for generating charts from CSV data"""
+    
     def __init__(self):
         super().__init__(
-            id="chart_generator_tool",
-            name="Chart Generator Tool",
-            description="Generates charts from CSV data using Python code",
-            parameters={
-                "code": {
-                    "type": "string",
-                    "description": "Python code to generate charts"
-                },
-                "csv_file": {
-                    "type": "string",
-                    "description": "Path to the CSV file containing data"
-                },
-                "output_prefix": {
-                    "type": "string",
-                    "description": "Prefix for output files (HTML and PNG)"
-                }
-            }
+            name="chart_generator_tool",
+            description="Generates charts from CSV data using Plotly"
         )
-        
-    def execute(self, inputs: Dict[str, Any]) -> str:
+    
+    def execute(self, code: str, csv_file: str, output_dir: str) -> str:
         """
         Execute Python code to generate charts from CSV data.
         
         Args:
-            inputs (Dict[str, Any]): Dictionary containing:
-                - code: Python code to generate charts
-                - csv_file: Path to the CSV file
-                - output_prefix: Prefix for output files
-                
+            code: Python code to generate charts
+            csv_file: Path to the CSV file containing the data
+            output_dir: Directory to save the generated charts
+            
         Returns:
-            str: Paths to generated files in markdown format
+            str: Summary of generated charts
         """
         try:
-            # Read the CSV file
-            df = pd.read_csv(inputs["csv_file"])
-            
             # Create output directory if it doesn't exist
-            os.makedirs("output", exist_ok=True)
+            os.makedirs(output_dir, exist_ok=True)
             
-            # Create a local namespace for code execution
-            namespace = {
-                "df": df,
-                "pd": pd,
-                "plt": plt,
-                "sns": sns,
-                "output_prefix": inputs["output_prefix"]
+            # Read the CSV file
+            df = pd.read_csv(csv_file)
+            
+            # Create a local namespace with required libraries
+            local_namespace = {
+                'df': df,
+                'pd': pd,
+                'px': px,
+                'go': go,
+                'output_dir': output_dir,
+                'datetime': datetime
             }
             
-            # Execute the code
-            exec(inputs["code"], namespace)
+            # Execute the code to generate charts
+            exec(code, local_namespace)
             
-            # Get the generated file paths
-            html_path = f"output/{inputs['output_prefix']}.html"
-            png_path = f"output/{inputs['output_prefix']}.png"
+            # Get list of generated files
+            generated_files = [f for f in os.listdir(output_dir) if f.endswith(('.png', '.html'))]
             
-            # Format response as markdown
-            markdown = "## Generated Charts\n\n"
-            markdown += f"### Interactive Chart\n[View Interactive Chart]({html_path})\n\n"
-            markdown += f"### Static Chart\n![Chart]({png_path})\n\n"
-            
-            return markdown
+            return f"Generated {len(generated_files)} charts in {output_dir}:\n" + "\n".join(generated_files)
             
         except Exception as e:
-            return f"Error generating charts: {str(e)}" 
+            return f"Failed to generate charts: {str(e)}" 

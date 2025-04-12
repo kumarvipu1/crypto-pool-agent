@@ -1,26 +1,27 @@
 import streamlit as st
-import os
+import json
+from pathlib import Path
 import base64
 from PIL import Image
+import os
+from agent import run_agent
 import asyncio
 import nest_asyncio
 import uuid
 import re
 from datetime import datetime
+from typing import Annotated, List, Optional, Tuple
 from markdown_pdf import MarkdownPdf, Section
 import streamlit.components.v1 as components
 import pandas as pd
 from io import BytesIO
 import plotly.io as pio
-from .main import run_pipeline
-
-# Apply nest_asyncio to allow nested event loops
-nest_asyncio.apply()
-
-# Set plotly template
 pio.templates["custom"] = pio.templates["seaborn"]
 pio.templates.default = "custom"
 pio.templates["custom"].layout.autosize = True
+
+# Apply nest_asyncio to allow nested event loops
+nest_asyncio.apply()
 
 # Initialize session state
 if "file_hashes" not in st.session_state:
@@ -53,7 +54,8 @@ def get_resized_base64_image_src(img_path, max_width=1000, max_height=800):
         return get_base64_image_src(img_path)
 
 @st.cache_data
-def write_markdown_to_file(content, filename="blog.md"):
+def write_markdown_to_file(content: Annotated[str, "The markdown content to write"], 
+                        filename: Annotated[str, "The name of the file (with or without .md extension)"] = "blog.md") -> str:
     """
     Write markdown content to a file with .md extension and create PDF with appended images.
     Uses Streamlit caching to prevent redundant file operations.
@@ -176,7 +178,7 @@ def create_slideshow(image_paths, height=800):
         cursor: pointer;
         margin-bottom: 0;
         padding-bottom: 0;
-        margin-top: -10px; /* Adjusted to bring slightly up in position */
+        margin-top: -10px;
     }}
 
     .active, .dot:hover {{
@@ -689,14 +691,24 @@ def display_metrics(metrics_dict):
         Error processing metrics visualization
         Error type: {type(e).__name__}
         Error details: {str(e)}
-        """)
+        """
+        )
         st.error("Problematic metrics data:")
         st.code(str(metrics_dict))
 
+# Create a new event loop for async operations
 def get_agent_response(user_query):
     try:
-        # Run the pipeline
-        response = run_pipeline(user_query)
+        # Create a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the agent in the new event loop
+        response = run_agent(user_query)
+        
+        # Close the loop
+        loop.close()
+        
         return response
     except Exception as e:
         st.error(f"Error in agent response: {str(e)}")
@@ -1078,6 +1090,19 @@ def main():
                 response = get_agent_response(user_query)
                 
                 if response:
+                    # Validate metrics_dict before adding to history
+                    if hasattr(response, 'metrics_dict'):
+                        try:
+                            # Test parsing of metrics_dict
+                            if isinstance(response.metrics_dict, str):
+                                json.loads(response.metrics_dict.replace("'", '"'))
+                        except json.JSONDecodeError as e:
+                            st.warning(f"Invalid metrics format in response: {str(e)}")
+                            response.metrics_dict = "{}"  # Set empty metrics if invalid
+                    else:
+                        st.warning("Response missing metrics_dict attribute")
+                        response.metrics_dict = "{}"
+
                     # Add to chat history (new messages at the beginning)
                     st.session_state.chat_history.insert(0, {
                         "query": user_query,
@@ -1101,15 +1126,15 @@ def main():
                 # Create two columns: one for content, one for document preview
                 # Display markdown report with unique key
                 st.markdown(
-                    chat["response"]["markdown_report"].replace("![](assets/Agusto_logo.jpg)", "")
+                    chat["response"].markdown_report.replace("![](assets/Agusto_logo.jpg)", "")
                 )
                 
                 # Add download button for PDF with error handling and unique key
-                if chat["response"]["pdf_path"]:
+                if chat["response"].pdf_path:
                     st.markdown(
                                 download_button(
-                                    chat["response"]["markdown_report"],
-                                    chat["response"]["pdf_path"],
+                                    chat["response"].markdown_report,
+                                    chat["response"].pdf_path,
                                     "Download Report PDF",
                                 ),
                         unsafe_allow_html=True
@@ -1120,11 +1145,11 @@ def main():
                 st.markdown("\n\n\n\n\n")
                 # Display document preview with error handling
                 st.subheader("Data Preview")
-                if chat["response"]["html_path"]:
+                if chat["response"].html_path:
                     try:
                         
-                        if chat["response"]["html_path"]:
-                            for html_path in chat["response"]["html_path"]:
+                        if chat["response"].html_path:
+                            for html_path in chat["response"].html_path:
                                 image_paths = html_path
                                 try:
                                     try:
@@ -1154,12 +1179,12 @@ def main():
                                     """, unsafe_allow_html=True)
                                 except Exception as e:
                                     st.info(f"Error displaying HTML file: {str(e)}")
-                                    if chat["response"]["png_path"]:
-                                        for png_path in chat["response"]["png_path"]:
+                                    if chat["response"].png_path:
+                                        for png_path in chat["response"].png_path:
                                             image_paths = png_path
                                             st.image(image_paths)
-                        elif chat["response"]["png_path"]:
-                            image_paths = chat["response"]["png_path"]
+                        elif chat["response"].png_path:
+                            image_paths = chat["response"].png_path
                             try:
                                 create_slideshow(image_paths, height=1000)
                             except Exception as e:
