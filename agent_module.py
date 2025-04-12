@@ -32,8 +32,8 @@ dotenv.load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-
-logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), scrubbing=False)
+if os.getenv("LOGFIRE_TOKEN"):
+    logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), scrubbing=False)
 
 
 def read_json_file(filepath: str) -> Union[str, Dict[str, Any]]:
