@@ -68,7 +68,9 @@ def convert_to_agent_response(json_str: str) -> agent_response:
         metrics_dict=response_dict['metrics_dict'],
         html_path=response_dict['html_path'],
         png_path=response_dict['png_path'],
-        pdf_path=response_dict['pdf_path']
+        pdf_path=response_dict['pdf_path'],
+        enso_route=response_dict['enso_route'],
+        enso_route_file=response_dict['enso_route_file']
     )
 
 @st.cache_data
@@ -583,7 +585,7 @@ def main():
     # Footer HTML
     footer_html = f"""
         <div class="footer-content">
-            <span>© {datetime.now().year} Vizyx Ltd. All rights reserved. For demonstration purposes only.</span>
+            <span>© {datetime.now().year} By Buffer Overflow. For demonstration purposes only.</span>
         </div>
     """
 
@@ -762,6 +764,10 @@ def main():
                 Error details: {str(e)}
                 """
                 )
+            if chat["response"].enso_route != "":
+                st.markdown("## Transaction Route")
+                st.markdown(f"Enso Route: {chat['response'].enso_route}")
+                
         st.markdown("--------------------------------")
 
     # Display footer at the end

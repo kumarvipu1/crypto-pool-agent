@@ -1,4 +1,4 @@
-
+import requests
 from langchain_experimental.utilities import PythonREPL
 from typing import Annotated, List, Optional, Tuple, Union, Dict, Any
 from pydantic import BaseModel, Field
@@ -597,7 +597,9 @@ class agent_response(BaseModel):
     html_path: list[str] = Field(description = "The list of paths where the html of visualizations is stored")
     png_path: list[str] = Field(description = "The list of paths where the png of visualizations is stored")
     pdf_path: str = Field(description = "The path where the pdf of the report can be stored")
-    
+    enso_route: str = Field(description = "The routing information from Enso Finance API", default=None)
+    enso_route_file: str = Field(description = "The path where the routing information from Enso Finance API is stored", default=None)
+
 model = openai.OpenAIModel('gpt-4o',provider=OpenAIProvider(api_key=os.getenv('OPENAI_API_KEY')))
 agent = Agent(model=model, deps_type=agent_state, result_type=agent_response)
 
@@ -618,6 +620,7 @@ def get_agent_system_prompt(ctx: RunContext[agent_state]):
     - metric_calculator : to run the python code to calculate the metrics
     - get_column_list : to retrieve the column list from the json file
     - graph_generator : to generate the graph
+    - get_transaction_route : to get the token swap information if user asks for token swap.
     
     Follow the following steps:
     1. Understand the user query and identify what liquidity information the user is looking for
@@ -626,16 +629,18 @@ def get_agent_system_prompt(ctx: RunContext[agent_state]):
     4. Use the get_column_list tool to retrieve the column list from the csv file, use these columns for metric calculation and visualization
     5. List out the metrics that you can calculate from the liquidity information and data summary
     6. Use the metric_calculator tool to run the python code using the tabulate library to calculate the metrics, use print statement to read the calculated metrics in tabular format
-    7. Plot charts for the metrics calculated in step 6 using plotly express library and save them in html and png format. Use the graph_generator tool to execute the code and save the output in html and png format
-    8. Analyze the liquidity information thoroughly, focusing the information asked by the user in the query
-    9. Create a comprehensive markdown report, use your best judgement to structure the report. Bold the key information asked by the user in the report.
+    7. IMPORTANT:use the get_transaction_route tool to get the routing information from the user query is about the best route to swap the token
+    8. Plot charts for the metrics calculated in step 6 using plotly express library and save them in html and png format. Use the graph_generator tool to execute the code and save the output in html and png format
+    9. Analyze the liquidity information thoroughly, focusing the information asked by the user in the query
+    10. Create a comprehensive markdown report, use your best judgement to structure the report. Bold the key information asked by the user in the report.
     
         [Title of the report]
         [Date of the report]
         [Structured content as per the user query]
-    10. Generate a hypothetical pdf file name as <suitable_name>_<date>.pdf of the report, just name.
-    11. IMPORTANT: If the information is inferred and not directly present in the document, give a disclaimer that the information is inferred and not directly present in the document.
-    12. Stop the execution after the report is generated.
+        
+    11. Generate a hypothetical pdf file name as <suitable_name>_<date>.pdf of the report, just name it as report.pdf.
+    12. IMPORTANT: If the information is inferred and not directly present in the document, give a disclaimer that the information is inferred and not directly present in the document.
+    13. Stop the execution after the report is generated.
 
     """
     
@@ -780,6 +785,59 @@ def graph_generator(
         
     except Exception as e:
         return f"Failed to execute code. Error: {repr(e)}"
+      
+@agent.tool
+def get_transaction_route(ctx: RunContext[None], token_in: Annotated[str, "The input token address"], 
+                   token_out: Annotated[str, "The output token address"],
+                   output_file: Annotated[str, "The name of the file that has the routing information in format transaction_route_<date>.json"], 
+                   amount_in: Annotated[str, "The input amount in wei"] = "1000000000000000000",
+                   ):
+    """
+    get routing information for transaction and swaps between two tokens, use this tool if the user query is about the best route to swap the token.
+
+    """
+    enso_api_key = os.getenv("ENSO_API_KEY")
+    enso_api_url = os.getenv("ENSO_API_URL")
+    headers = {
+        "Authorization": f"Bearer {enso_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "chainId": 1,
+        "fromAddress": "0xc500557bFbB3D30B3d40BB36ae93b30F896c2ED6",
+        "routingStrategy": "router",
+        "toEoa": True,
+        "receiver": "0xc500557bFbB3D30B3d40BB36ae93b30F896c2ED6",
+        "spender": "0xc500557bFbB3D30B3d40BB36ae93b30F896c2ED6",
+        "amountIn": [amount_in],
+        "minAmountOut": None,
+        "slippage": "300",
+        "fee": ["100"],
+        "feeReceiver": "0x220866B1A2219f40e72f5c628B65D54268cA3A9D",
+        "ignoreAggregators": ["false"],
+        "ignoreStandards": ["<false>"],
+        "tokenIn": [token_in],
+        "tokenOut": [token_out],
+        "variableEstimates": None
+    }
+    
+    
+
+    response = requests.post(
+        enso_api_url,
+        headers=headers,
+        json=payload
+    )
+
+    # Check response status
+    if response.status_code != 200:
+        return f"Error: API request failed with status code {response.status_code}. Response: {response.text}"
+
+    with open(output_file, 'w') as f:
+        json.dump(response.json(), f)
+
+    return f"Routing information saved to {output_file}, \n the route is: {response.json()['route']}"
     
 
 # Running the agent
