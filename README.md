@@ -218,5 +218,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Built with [Portia](https://github.com/portia-ai/portia)
-- Uses [LangChain](https://github.com/langchain-ai/langchain) for agent capabilities
+- Uses [PydanticAI](https://ai.pydantic.dev/) for agent capabilities
 - Powered by [OpenAI](https://openai.com/) GPT-4 
