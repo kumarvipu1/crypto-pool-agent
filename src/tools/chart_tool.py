@@ -1,6 +1,8 @@
+"""Chart Generator Tool."""
+
+from portia.tool import Tool, ToolRunContext
+from portia.errors import ToolHardError
 from pydantic import BaseModel, Field
-from portia import Tool
-from typing import Dict, Any, Optional
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
@@ -9,32 +11,54 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
+from typing import Dict, Any, List, Optional
 
-class ChartGeneratorSchema(BaseModel):
+class ChartGeneratorInput(BaseModel):
+    """Input schema for the chart generator tool."""
     code: str = Field(..., description="The Python code to execute to generate charts")
     csv_file: str = Field(..., description="The path to the CSV file containing the data")
     output_dir: str = Field(..., description="The directory to save the generated charts")
+    chart_types: List[str] = Field(default=["html", "png"], description="Types of charts to generate")
 
-class ChartGeneratorTool(Tool):
-    """Tool for generating charts from CSV data"""
+class ChartGeneratorOutput(BaseModel):
+    """Output schema for the chart generator tool."""
+    html_files: List[str] = Field(default=[], description="Paths to generated HTML charts")
+    png_files: List[str] = Field(default=[], description="Paths to generated PNG charts")
+    error: Optional[str] = Field(None, description="Error message if generation failed")
+
+class ChartGeneratorTool(Tool[ChartGeneratorOutput]):
+    """Tool for generating charts from CSV data.
     
+    This tool executes Python code to generate interactive and static charts from CSV data.
+    It supports multiple output formats (HTML and PNG) and provides proper error handling.
+    """
+    
+    id: str = "chart_generator_tool"
+    name: str = "Chart Generator Tool"
+    description: str = "Generates charts from CSV data using Plotly"
+    args_schema: type[BaseModel] = ChartGeneratorInput
+    output_schema: tuple[str, str] = ("ChartGeneratorOutput", "Output containing paths to generated chart files")
+    should_summarize: bool = False
+
     def __init__(self):
-        super().__init__(
-            name="chart_generator_tool",
-            description="Generates charts from CSV data using Plotly"
-        )
+        super().__init__()
     
-    def execute(self, code: str, csv_file: str, output_dir: str) -> str:
+    def run(self, ctx: ToolRunContext, code: str, csv_file: str, output_dir: str, chart_types: List[str] = ["html", "png"]) -> ChartGeneratorOutput:
         """
         Execute Python code to generate charts from CSV data.
         
         Args:
-            code: Python code to generate charts
-            csv_file: Path to the CSV file containing the data
-            output_dir: Directory to save the generated charts
+            ctx: The tool run context containing the input parameters
+            code: The Python code to execute
+            csv_file: Path to the CSV file
+            output_dir: Directory to save charts
+            chart_types: Types of charts to generate
             
         Returns:
-            str: Summary of generated charts
+            ChartGeneratorOutput: The paths to generated charts
+            
+        Raises:
+            ToolHardError: If the chart generation fails
         """
         try:
             # Create output directory if it doesn't exist
@@ -49,6 +73,8 @@ class ChartGeneratorTool(Tool):
                 'pd': pd,
                 'px': px,
                 'go': go,
+                'plt': plt,
+                'sns': sns,
                 'output_dir': output_dir,
                 'datetime': datetime
             }
@@ -57,9 +83,20 @@ class ChartGeneratorTool(Tool):
             exec(code, local_namespace)
             
             # Get list of generated files
-            generated_files = [f for f in os.listdir(output_dir) if f.endswith(('.png', '.html'))]
+            html_files = []
+            png_files = []
             
-            return f"Generated {len(generated_files)} charts in {output_dir}:\n" + "\n".join(generated_files)
+            for file in os.listdir(output_dir):
+                file_path = os.path.join(output_dir, file)
+                if file.endswith('.html'):
+                    html_files.append(file_path)
+                elif file.endswith('.png'):
+                    png_files.append(file_path)
+            
+            return ChartGeneratorOutput(
+                html_files=html_files,
+                png_files=png_files
+            )
             
         except Exception as e:
-            return f"Failed to generate charts: {str(e)}" 
+            raise ToolHardError(f"Failed to generate charts: {str(e)}") from e 

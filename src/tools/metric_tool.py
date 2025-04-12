@@ -1,37 +1,59 @@
+"""Metric Calculator Tool."""
+
+from portia.tool import Tool, ToolRunContext
+from portia.errors import ToolHardError
 from pydantic import BaseModel, Field
-from portia import Tool
-from typing import Optional
 import pandas as pd
+import numpy as np
 from tabulate import tabulate
 from io import StringIO
-import sys
 from contextlib import redirect_stdout
-import numpy as np
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
-class MetricCalculatorSchema(BaseModel):
+class MetricCalculatorInput(BaseModel):
+    """Input schema for the metric calculator tool."""
     code: str = Field(..., description="The Python code to execute to run calculations")
     csv_file: str = Field(..., description="The path to the CSV file containing the data")
+    output_format: str = Field(default="table", description="Output format: 'table' or 'dict'")
 
-class MetricCalculatorTool(Tool):
-    """Tool for calculating metrics from CSV data"""
+class MetricCalculatorOutput(BaseModel):
+    """Output schema for the metric calculator tool."""
+    metrics: Dict[str, Any] = Field(..., description="Calculated metrics")
+    table_output: Optional[str] = Field(None, description="Metrics in tabular format")
+    error: Optional[str] = Field(None, description="Error message if calculation failed")
+
+class MetricCalculatorTool(Tool[MetricCalculatorOutput]):
+    """Tool for calculating metrics from CSV data.
     
+    This tool executes Python code to calculate metrics from CSV data. It supports
+    both tabular and dictionary output formats and provides proper error handling.
+    """
+    
+    id: str = "metric_calculator_tool"
+    name: str = "Metric Calculator Tool"
+    description: str = "Calculates metrics from CSV data using Python code"
+    args_schema: type[BaseModel] = MetricCalculatorInput
+    output_schema: tuple[str, str] = ("MetricCalculatorOutput", "Output containing calculated metrics and optional table format")
+    should_summarize: bool = False
+
     def __init__(self):
-        super().__init__(
-            name="metric_calculator_tool",
-            description="Calculates metrics from CSV data using Python code"
-        )
+        super().__init__()
     
-    def execute(self, code: str, csv_file: str) -> str:
+    def run(self, ctx: ToolRunContext, code: str, csv_file: str, output_format: str = "table") -> MetricCalculatorOutput:
         """
         Execute Python code to calculate metrics from CSV data.
         
         Args:
-            code: Python code to execute for metric calculation
-            csv_file: Path to the CSV file containing the data
+            ctx: The tool run context containing the input parameters
+            code: The Python code to execute
+            csv_file: Path to the CSV file
+            output_format: Output format ('table' or 'dict')
             
         Returns:
-            str: Calculated metrics in tabular format
+            MetricCalculatorOutput: The calculated metrics and optional table output
+            
+        Raises:
+            ToolHardError: If the metric calculation fails
         """
         try:
             # Read the CSV file
@@ -41,15 +63,34 @@ class MetricCalculatorTool(Tool):
             local_namespace = {
                 'df': df,
                 'pd': pd,
-                'np': np
+                'np': np,
+                'tabulate': tabulate
             }
             
             # Capture stdout to get the printed metrics
             output = StringIO()
-            with redirect_stdout(output):
-                exec(code, local_namespace)
+            metrics_dict = {}
             
-            return output.getvalue()
+            with redirect_stdout(output):
+                # Execute the code
+                exec(code, local_namespace)
+                
+                # Try to get metrics from the local namespace
+                for var_name, var_value in local_namespace.items():
+                    if isinstance(var_value, (pd.DataFrame, pd.Series, np.ndarray)):
+                        metrics_dict[var_name] = var_value
+                    elif isinstance(var_value, (int, float, str, bool)):
+                        metrics_dict[var_name] = var_value
+            
+            # Create table output if requested
+            table_output = None
+            if output_format == "table":
+                table_output = output.getvalue()
+            
+            return MetricCalculatorOutput(
+                metrics=metrics_dict,
+                table_output=table_output
+            )
             
         except Exception as e:
-            return f"Failed to calculate metrics: {str(e)}" 
+            raise ToolHardError(f"Failed to calculate metrics: {str(e)}") from e 
