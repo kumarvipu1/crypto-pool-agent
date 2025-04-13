@@ -49,8 +49,8 @@ class QueryRunner(Tool[str]):
                 'markdown_report': f'no data with error \n {e}',
                 'csv_path': '',
                 'metrics_dict': '',
-                'html_path': '',
-                'png_path': '',
+                'html_path': [''],
+                'png_path': [''],
                 'pdf_path': '',
                 'enso_route': '',
                 'enso_route_file': ''
