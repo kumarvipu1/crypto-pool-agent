@@ -705,7 +705,26 @@ def main():
 
                 st.markdown("--------------------------------")
                 
-                st.markdown("\n\n\n\n\n")
+                if chat["response"].enso_route != "":
+                    st.markdown("## Transaction Route")
+                    st.markdown(f"Enso Route: {chat['response'].enso_route}")
+                    
+                    # Add download button for Enso route JSON file
+                    if chat["response"].enso_route_file:
+                        try:
+                            with open(chat["response"].enso_route_file, "rb") as json_file:
+                                json_bytes = json_file.read()
+                                st.download_button(
+                                    label="Download Route JSON",
+                                    data=json_bytes,
+                                    file_name="enso_route.json",
+                                    mime="application/json"
+                                )
+                        except Exception as e:
+                            st.warning(f"Error creating download button for route JSON: {str(e)}")
+                        st.markdown("--------------------------------")
+                
+                st.markdown("\n\n")
                 # Display document preview with error handling
                 st.subheader("Data Preview")
                 if chat["response"].html_path:
@@ -764,10 +783,8 @@ def main():
                 Error details: {str(e)}
                 """
                 )
-            if chat["response"].enso_route != "":
-                st.markdown("## Transaction Route")
-                st.markdown(f"Enso Route: {chat['response'].enso_route}")
-                
+            
+            
         st.markdown("--------------------------------")
 
     # Display footer at the end
