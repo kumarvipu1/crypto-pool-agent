@@ -15,6 +15,10 @@ Pool-Sweeper is an advanced AI-powered tool designed for comprehensive liquidity
 - 🎨 **Modern UI/UX**: Clean, intuitive interface with a responsive design
 - 🔄 **Real-time Processing**: Get instant responses to your queries
 
+## Architecture
+
+![Architecture](pool-sweeper-arch.png)
+
 ## Installation
 
 ### Prerequisites
