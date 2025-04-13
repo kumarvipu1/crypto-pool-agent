@@ -641,6 +641,8 @@ def get_agent_system_prompt(ctx: RunContext[agent_state]):
     11. Generate a hypothetical pdf file name as <suitable_name>_<date>.pdf of the report, just name it as report.pdf.
     12. IMPORTANT: If the information is inferred and not directly present in the document, give a disclaimer that the information is inferred and not directly present in the document.
     13. Stop the execution after the report is generated.
+    14. NOTE: If you see error at any point restart from last step
+    IMPORTANT: Always use actual token name or analysis in the report, never use placeholder names like Token 1 etc.
 
     """
     
