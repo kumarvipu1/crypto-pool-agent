@@ -597,8 +597,8 @@ class agent_response(BaseModel):
     html_path: list[str] = Field(description = "The list of paths where the html of visualizations is stored")
     png_path: list[str] = Field(description = "The list of paths where the png of visualizations is stored")
     pdf_path: str = Field(description = "The path where the pdf of the report can be stored")
-    enso_route: str = Field(description = "The routing information from Enso Finance API", default=None)
-    enso_route_file: str = Field(description = "The path where the routing information from Enso Finance API is stored", default=None)
+    enso_route: str = Field(description = "The routing information from Enso Finance API", default='')
+    enso_route_file: str = Field(description = "The path where the routing information from Enso Finance API is stored", default='')
 
 model = openai.OpenAIModel('gpt-4o',provider=OpenAIProvider(api_key=os.getenv('OPENAI_API_KEY')))
 agent = Agent(model=model, deps_type=agent_state, result_type=agent_response)
