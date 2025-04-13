@@ -47,12 +47,12 @@ class QueryRunner(Tool[str]):
             print(f"Error in agent response: {str(e)}")
             return {
                 'markdown_report': f'no data with error \n {e}',
-                'csv_path': None,
-                'metrics_dict': None,
-                'html_path': None,
-                'png_path': None,
-                'pdf_path': None,
-                'enso_route': None,
-                'enso_route_file': None
+                'csv_path': '',
+                'metrics_dict': '',
+                'html_path': '',
+                'png_path': '',
+                'pdf_path': '',
+                'enso_route': '',
+                'enso_route_file': ''
             }
 
