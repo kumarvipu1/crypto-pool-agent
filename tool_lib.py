@@ -32,11 +32,6 @@ class QueryRunner(Tool[str]):
     def run(self, _: ToolRunContext, user_query: str) -> str:
         try:
             response = run_agent(user_query)
-            enso_route = response.enso_route
-            enso_route_file = response.enso_route_file
-            if not enso_route:
-                enso_route = ""
-                enso_route_file = ""
             response_dict = {
                 'markdown_report': response.markdown_report,
                 'csv_path': response.csv_path,
@@ -44,11 +39,20 @@ class QueryRunner(Tool[str]):
                 'html_path': response.html_path,
                 'png_path': response.png_path,
                 'pdf_path': response.pdf_path,
-                'enso_route': enso_route,
-                'enso_route_file': enso_route_file
+                'enso_route': response.enso_route,
+                'enso_route_file': response.enso_route_file
             }
             return str(response_dict)  # Return as single-item tuple
         except Exception as e:
             print(f"Error in agent response: {str(e)}")
-            raise
+            return {
+                'markdown_report': f'no data with error \n {e}',
+                'csv_path': None,
+                'metrics_dict': None,
+                'html_path': None,
+                'png_path': None,
+                'pdf_path': None,
+                'enso_route': None,
+                'enso_route_file': None
+            }
 

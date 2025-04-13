@@ -844,9 +844,10 @@ def get_transaction_route(ctx: RunContext[None], token_in: Annotated[str, "The i
 
 # Running the agent
 def run_agent(user_prompt: str):
+    logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), scrubbing=False)
     user_prompt = user_prompt
     deps = agent_state(user_query=user_prompt)
-    result = agent.run_sync(user_prompt, deps=deps, model_settings=ModelSettings(temperature=0.5, timeout=100))
+    result = agent.run_sync(user_prompt, deps=deps, model_settings=ModelSettings(temperature=0.5, timeout=300))
 
     return result.data
 
